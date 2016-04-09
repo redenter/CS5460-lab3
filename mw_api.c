@@ -91,14 +91,27 @@ int master( MPI_Comm global_comm, int argc, char** argv, struct mw_api_spec *f)
     int busy_workers_count=0;
 
 
+    //added code
     serial_t * mapping; 
 
+ //// variables required for collecting results
+    MPI_Status status;
+    char ** data[size];       // data sent by all workers
+    int * result_sizes[size]; // sizes of individual results sent by each worker
+    int result_counts[size];  // number of results sent by each worker
+    int total_results = 0; 
 
+    //added code
+    int pos = 0;
 
 
     for(int worker_rank =1;worker_rank<size;worker_rank++){
       int count = worker_rank <= remain ? a + 1 : a;
       char * b = serialize_works(count, works + offset, f->work_sz);
+     //added code
+      mapping->size = count;
+      mapping->data = b;
+     
       MPI_Send(&count,1,MPI_INT,worker_rank,0,global_comm);
       send_message(b,count*f->work_sz,worker_rank,0,global_comm);
       offset += count;
@@ -111,30 +124,60 @@ int master( MPI_Comm global_comm, int argc, char** argv, struct mw_api_spec *f)
     for(mw_work_t ** iter=works; *iter != NULL;iter++)
       free(*iter);
 
+//added code
+  while(q.size()!=0){
+      //receive count from any source
+
+      MPI_Recv(result_counts +pos,1,MPI_INT,MPI_ANY_SOURCE,0,global_comm,MPI_STATUS_IGNORE);
+      total_results += result_counts[pos];
+      result_sizes[pos] = malloc(sizeof(int) * result_counts[pos]);
+      data[pos] = malloc(sizeof(char *)*result_counts[pos]);
+
+      for(int j=0;j<result_counts[worker_rank];j++){
+        MPI_Recv(result_sizes[pos]+j,1,MPI_INT,status.MPI_SOURCE,0,global_comm,&status);
+      }
+
+       for(int j=0;j<result_counts[pos];j++){
+        int _size = *(result_sizes[pos]+j);
+        *(data[pos] +j) = malloc(_size);
+        MPI_Recv(*(data[pos]+j),_size,MPI_BYTE,status.MPI_SOURCE,0,global_comm,&status);
+      }
+      pos++;
+
+      //send topmost data from queue to this source
+      serial_t *dat = q.top();
+
+      MPI_Send(&dat->size,1,MPI_INT,worker_rank,0,global_comm);
+      send_message(dat->data,(dat->size)*f->work_sz,worker_rank,0,global_comm);
+
+    //in case of failure, add to queue.
+
+  }
+
+
+
+
+
     //// collect results
-    MPI_Status status;
-    char ** data[size];       // data sent by all workers
-    int * result_sizes[size]; // sizes of individual results sent by each worker
-    int result_counts[size];  // number of results sent by each worker
-    int total_results = 0; 
+
     
-    for(int worker_rank=1;worker_rank<=busy_workers_count;worker_rank++){   
+    // for(int worker_rank=1;worker_rank<=busy_workers_count;worker_rank++){   
 
-      MPI_Recv(result_counts +worker_rank,1,MPI_INT,worker_rank,0,global_comm,MPI_STATUS_IGNORE);
-      total_results += result_counts[worker_rank];
-      result_sizes[worker_rank] = malloc(sizeof(int) * result_counts[worker_rank]);
-      data[worker_rank] = malloc(sizeof(char *)*result_counts[worker_rank]);
+    //   MPI_Recv(result_counts +worker_rank,1,MPI_INT,worker_rank,0,global_comm,MPI_STATUS_IGNORE);
+    //   total_results += result_counts[worker_rank];
+    //   result_sizes[worker_rank] = malloc(sizeof(int) * result_counts[worker_rank]);
+    //   data[worker_rank] = malloc(sizeof(char *)*result_counts[worker_rank]);
 
-      for(int j=0;j<result_counts[worker_rank];j++){
-        MPI_Recv(result_sizes[worker_rank]+j,1,MPI_INT,worker_rank,0,global_comm,&status);
-      }
+    //   for(int j=0;j<result_counts[worker_rank];j++){
+    //     MPI_Recv(result_sizes[worker_rank]+j,1,MPI_INT,worker_rank,0,global_comm,&status);
+    //   }
 
-      for(int j=0;j<result_counts[worker_rank];j++){
-        int _size = *(result_sizes[worker_rank]+j);
-        *(data[worker_rank] +j) = malloc(_size);
-        MPI_Recv(*(data[worker_rank]+j),_size,MPI_BYTE,worker_rank,0,global_comm,&status);
-      }
-    }
+    //   for(int j=0;j<result_counts[worker_rank];j++){
+    //     int _size = *(result_sizes[worker_rank]+j);
+    //     *(data[worker_rank] +j) = malloc(_size);
+    //     MPI_Recv(*(data[worker_rank]+j),_size,MPI_BYTE,worker_rank,0,global_comm,&status);
+    //   }
+    // }
 
 
 
