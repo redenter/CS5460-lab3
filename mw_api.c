@@ -4,7 +4,7 @@
 #include "queue.h"
 
 #define MAX_MESSAGE_SIZE_IN_BYTE 500000
-#define TIMEOUT 2000
+#define TIMEOUT 2000.0
 /* run master-worker */
 void MW_Run (int argc, char **argv, struct mw_api_spec *f){
 
@@ -112,7 +112,7 @@ int master(MPI_Comm global_comm, int argc, char** argv, struct mw_api_spec *f )
 
   }
 
-//while(queue_size()!=0){
+while(queue_size()!=0){
 
   for(int i=1;i<size;i++){
     if(*(freeWorkers+i) ==1 && *(aliveWorkers+i)==1){
@@ -134,35 +134,36 @@ int master(MPI_Comm global_comm, int argc, char** argv, struct mw_api_spec *f )
   MPI_Request request;
 
 
-    int flag = 1;
+    int flag = -1;
 
-      printf("before loop %d\n",min_time_idx(last_delivery_time,aliveWorkers,size));
-
-  while(MPI_Wtime()<last_delivery_time[min_time_idx(last_delivery_time,aliveWorkers,size)]+TIMEOUT){
-
-       if(status.MPI_TAG==MPI_SUCCESS){
-        printf("inside this area");
-        work_recvd +=1;
-        memcpy(((char *)mw_results) + work_recvd*f->res_sz, result_buf,f->res_sz);
-        *(freeWorkers+status.MPI_SOURCE) = 0;
-        *(last_delivery_time+status.MPI_SOURCE) = MPI_Wtime();
-      }
-
-      if(flag==1){
+  int minTimeIdx = min_time_idx(last_delivery_time,aliveWorkers,size);
+  while(MPI_Wtime()<last_delivery_time[minTimeIdx]+TIMEOUT){
+      if(flag==1 || flag==-1){
         MPI_Irecv(result_buf,f->res_sz,MPI_BYTE,MPI_ANY_SOURCE,0,global_comm,&request);
         printf("inside I recv cond");
       }
       
     MPI_Test(&request,&flag,&status);
+      if(flag==1){
+        printf("inside this area,source is %d\n",status.MPI_SOURCE);
+        work_recvd +=1;
+        memcpy(((char *)mw_results) + work_recvd*f->res_sz, result_buf,f->res_sz);
+        *(freeWorkers+status.MPI_SOURCE) = 1;
+      }
+
+     // printf("queue size is%d\n",queue_size());
   }
-  if(flag == 0 ){
+  if(status.MPI_SOURCE==minTimeIdx && flag == 0 ){
     Enqueue( *(sent_work+status.MPI_SOURCE));
     *(aliveWorkers+status.MPI_SOURCE) = 0;
 }
+// for(int i=1;i<size;i++){
+//   printf("worker %d status ")
+// }
 
   //recieve from any source
 
-//}
+}
 printf("finished the process");
 //
  f->result(totalWorks,mw_results);
