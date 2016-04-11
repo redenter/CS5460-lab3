@@ -126,6 +126,7 @@ while(queue_size()!=0){
       *(freeWorkers+i) = 0;
       *(last_delivery_time+i) = MPI_Wtime();
 
+      Dequeue();
        printf("after mpi !!\n");
 
     }
@@ -151,12 +152,13 @@ while(queue_size()!=0){
         *(freeWorkers+status.MPI_SOURCE) = 1;
       }
 
-     // printf("queue size is%d\n",queue_size());
+     // 
   }
   if(status.MPI_SOURCE==minTimeIdx && flag == 0 ){
     Enqueue( *(sent_work+status.MPI_SOURCE));
     *(aliveWorkers+status.MPI_SOURCE) = 0;
 }
+printf("queue size is%d\n",queue_size());
 // for(int i=1;i<size;i++){
 //   printf("worker %d status ")
 // }
