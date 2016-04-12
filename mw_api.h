@@ -3,10 +3,20 @@ struct userdef_result_t; /* definition provided by user */
 typedef struct userdef_work_t mw_work_t;
 typedef struct userdef_result_t mw_result_t;
 
+
+
 struct serial_t{
   size_t size;
   char *data;
 };
+
+typedef struct worker_s{
+  int rank;
+  int alive;
+  int idle;
+  double last_work_received_at;
+  struct serial_t  *current_work;
+} worker_t;
 
 struct mw_api_spec {
    mw_work_t **(*create) (int argc, char **argv);
@@ -24,4 +34,3 @@ struct mw_api_spec {
 };
 
 void MW_Run (int argc, char **argv, struct mw_api_spec *f);
-
