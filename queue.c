@@ -1,13 +1,14 @@
 #include<stdio.h>
 #include<stdlib.h>
+#include "mw_api.h"
 
-// struct serial_t{
+// work_allocation_t{
 //   size_t size;
 //   char *data;
 // };
 
 struct Node {
-	struct serial_t *data;
+	work_allocation_t *data;
 	struct Node* next;
 };
 
@@ -16,7 +17,7 @@ struct Node* front = NULL;
 struct Node* rear = NULL;
 
 // To Enqueue an integer
-void Enqueue(struct serial_t *d) {
+void Enqueue(work_allocation_t *d) {
 	struct Node* temp = 
 		(struct Node*)malloc(sizeof(struct Node));
 	temp->data =d; 
@@ -45,7 +46,7 @@ void Dequeue() {
 	free(temp);
 }
 
-struct serial_t * Front() {
+work_allocation_t * Front() {
 	if(front == NULL) {
 		printf("Queue is empty\n");
 		return NULL;
@@ -78,7 +79,7 @@ int queue_size(){
 // int main(){
 // 	/* Drive code to test the implementation. */
 // 	// Printing elements in Queue after each Enqueue or Dequeue 
-// 	struct serial_t *dat = malloc(sizeof(struct serial_t));
+// 	work_allocation_t *dat = malloc(sizeof(work_allocation_t));
 // 	dat->size = 2;
 // 	char* d = malloc(sizeof(char)*2);
 // 	*(d+0) = '1';

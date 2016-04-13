@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "mpi.h"
 #include "mw_api.h"
 #include "queue.h"
@@ -126,8 +127,8 @@ int master(MPI_Comm global_comm, int argc, char** argv, struct mw_api_spec *f )
     char * b = serialize_works(count, works + totalWorks, f->work_sz);
     totalWorks+=count;
 
-    struct serial_t* dat = (struct serial_t *)malloc(sizeof(struct serial_t ));
-    dat->data = b;
+    work_allocation_t* dat = (work_allocation_t *)malloc(sizeof(work_allocation_t ));
+    dat->work_data = b;
     dat->size = count;
     Enqueue(dat);
   }
@@ -156,10 +157,10 @@ int master(MPI_Comm global_comm, int argc, char** argv, struct mw_api_spec *f )
         if(Front() == NULL)
           break;
 
-        struct serial_t * ser_work = Front();
-        MPI_Send(ser_work->data, f->work_sz,MPI_BYTE,workers[i]->rank,0,global_comm);
+        work_allocation_t * ser_work = Front();
+        MPI_Send(ser_work->work_data, f->work_sz,MPI_BYTE,workers[i]->rank,0,global_comm);
         total_free_workers--;
-        workers[i]->current_work = ser_work;
+        workers[i]->current_work_allocation = ser_work;
         workers[i]->idle =0;
         workers[i]->last_work_received_at = MPI_Wtime();
         printf("assign work to worker %d\n",workers[i]->rank);
@@ -203,7 +204,7 @@ int master(MPI_Comm global_comm, int argc, char** argv, struct mw_api_spec *f )
       printf("due worker times out\n");
       due_worker->alive =0;
       total_alive_workers--;
-      Enqueue(due_worker->current_work);
+      Enqueue(due_worker->current_work_allocation);
     }
 
     if(total_alive_workers != 0){
@@ -221,10 +222,23 @@ int master(MPI_Comm global_comm, int argc, char** argv, struct mw_api_spec *f )
 
   free(works);
   free(mw_results);
+  MPI_Abort(MPI_COMM_WORLD,0);
+  
   return 0;  
 
 }
 
+/*master failures
+  1. choosing a proxy master every time the master boots up or is chosen
+  2. the proxy master needs all the progress info, atleast of the works that have been completed. 
+  Either the master could send them or the workers send that info. 
+
+
+  //terminate command?
+
+
+
+*/
 
 int slave(MPI_Comm global_comm, struct mw_api_spec *f)
 {

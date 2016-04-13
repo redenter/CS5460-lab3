@@ -5,17 +5,18 @@ typedef struct userdef_result_t mw_result_t;
 
 
 
-struct serial_t{
+typedef struct work_allocation_s{
   size_t size;
-  char *data;
-};
+  int * work_ids;
+  char * work_data;
+} work_allocation_t;
 
 typedef struct worker_s{
   int rank;
   int alive;
   int idle;
   double last_work_received_at;
-  struct serial_t  *current_work;
+  work_allocation_t  *current_work_allocation;
 } worker_t;
 
 struct mw_api_spec {
