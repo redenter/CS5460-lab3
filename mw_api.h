@@ -7,7 +7,7 @@ typedef struct userdef_result_t mw_result_t;
 
 typedef struct work_allocation_s{
   size_t size;
-  int * work_ids;
+  int work_id;
   char * work_data;
 } work_allocation_t;
 
