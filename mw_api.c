@@ -8,7 +8,7 @@
 
 #define MAX_MESSAGE_SIZE_IN_BYTE 500000
 #define TIMEOUT 2 //in seconds
-#define FAIL_RATE 0.1
+#define FAIL_RATE 0.1 //0.1
 #define TAG_TERMINATE 404
 /* run master-worker */
 void MW_Run (int argc, char **argv, struct mw_api_spec *f){
@@ -84,7 +84,7 @@ char * serialize_worker_status(worker_t * workers[], int n){
   for(int i=0;i<n;i++){
     alive_info[i] = workers[i]->alive;
     //printf("workers[i]->current_work_allocation%s\n",workers[i]->current_work_allocation);
-    if(workers[i]->current_work_allocation == NULL)
+    if(workers[i]->idle !=1 || workers[i]->current_work_allocation == NULL )
       work_ids[i] = -1;
     else
       work_ids[i] = (workers[i]->current_work_allocation)->work_id;
@@ -176,9 +176,8 @@ worker_t * find_worker_by_rank(int rank, worker_t * workers[]){
 }
 
 
-int get_work_done(int rank,MPI_Comm global_comm,queue *q,worker_t * workers[], mw_result_t * mw_results ,int total_workers, int total_free_workers, int total_alive_workers, struct mw_api_spec *f, int totalWorks){
-  
-  int work_recvd = 0;
+int get_work_done(int rank,MPI_Comm global_comm,queue *q,worker_t * workers[], mw_result_t * mw_results ,int total_workers, int total_free_workers, int total_alive_workers, struct mw_api_spec *f, int totalWorks,int work_recvd){
+
   int proxy_master_rank = 1;
   MPI_Status status;
   int kill;
@@ -189,7 +188,7 @@ int get_work_done(int rank,MPI_Comm global_comm,queue *q,worker_t * workers[], m
 
        MPI_Iprobe(proxy_master_rank, TAG_TERMINATE, global_comm, &kill, &status);
         if(kill==1){
-          printf("primary master dies!!!!!!!!!!!!!!!!!!\n");
+          printf("primary master receives pink slip!\n");
           MPI_Finalize();
           exit(1);
           return 0;
@@ -202,27 +201,18 @@ int get_work_done(int rank,MPI_Comm global_comm,queue *q,worker_t * workers[], m
       memcpy(all_data_b,b,b_size);
       memcpy(all_data_b+b_size,mw_results,f->res_sz*work_recvd);
 
-      //MPI_Send(mw_results,(f->res_sz)*work_recvd,MPI_BYTE,proxy_master_rank,0,global_comm);
       F_Send(all_data_b,b_size +(f->res_sz)*work_recvd ,MPI_BYTE,proxy_master_rank,0,global_comm,FAIL_RATE);
-      //MPI_Send(all_data_b,b_size +(f->res_sz)*work_recvd ,MPI_BYTE,proxy_master_rank,0,global_comm);
       free(all_data_b);
       free(b);
-
-      //F_Send(mw_results,(f->res_sz)*work_recvd,MPI_BYTE,proxy_master_rank,0,global_comm,FAIL_RATE);
-      //F_Send(b,sizeof(int)*2*total_workers,MPI_BYTE,proxy_master_rank,0,global_comm,FAIL_RATE);
-
-
-     // F_Send(b,sizeof(int)*(2*total_workers),MPI_BYTE,proxy_master_rank,0,global_comm,FAIL_RATE);
     }
+
     for(int i=0;i<total_workers;i++){
       if(workers[i]->idle ==1 && workers[i]->alive ==1){
         //send work
-        printf("came in here, id no %d\n",workers[i]->rank);
         if(Front(q) == NULL)
           break;
 
         work_allocation_t * ser_work = Front(q);
-        printf("new master %d inside\n",rank);
         F_Send(ser_work->work_data, f->work_sz,MPI_BYTE,workers[i]->rank,0,global_comm,FAIL_RATE);
          //MPI_Send(ser_work->work_data, f->work_sz,MPI_BYTE,workers[i]->rank,0,global_comm);
         total_free_workers--;
@@ -242,7 +232,7 @@ int get_work_done(int rank,MPI_Comm global_comm,queue *q,worker_t * workers[], m
     if(due_worker == NULL){
       continue;
     }
-    printf("my rank %d,due worker's rank is %d\n",rank,due_worker->rank);
+    printf("master rank %d,due worker's rank is %d\n",rank,due_worker->rank);
     while(MPI_Wtime()<due_worker->last_work_received_at+TIMEOUT && total_free_workers < total_alive_workers){
       if(received==1){
         MPI_Irecv(result_buf,f->res_sz,MPI_BYTE,MPI_ANY_SOURCE,0,global_comm,&request);
@@ -257,10 +247,10 @@ int get_work_done(int rank,MPI_Comm global_comm,queue *q,worker_t * workers[], m
             work_recvd++;
             sender->idle =1;
             total_free_workers++;
-            printf("my rank %d,receive result from alive worker %d\n",rank,status.MPI_SOURCE);
+            printf("master rank %d,receive result from alive worker %d\n",rank,status.MPI_SOURCE);
           }
           else{
-            printf("my rank %d,receive result from dead worker %d\n",rank,status.MPI_SOURCE );
+            printf("master rank %d,receive result from dead worker %d\n",rank,status.MPI_SOURCE );
           }
         }
     }
@@ -268,7 +258,7 @@ int get_work_done(int rank,MPI_Comm global_comm,queue *q,worker_t * workers[], m
       MPI_Cancel(&request);
 
     if(due_worker->idle == 0){
-      printf("my rank %d,due worker times out\n",rank);
+      printf("master rank %d,due worker times out\n",rank);
       due_worker->alive =0;
       total_alive_workers--;
       Enqueue(q,due_worker->current_work_allocation);
@@ -335,6 +325,7 @@ int total_workers = size-2;
     worker_t *worker = malloc(sizeof(worker_t));
     worker->rank=i;
     worker->alive=1;
+    worker->idle = 1;
     work_allocation_t* dat = (work_allocation_t *)malloc(sizeof(work_allocation_t ));
     worker->current_work_allocation = dat;
     workers[i-2] = worker;
@@ -369,7 +360,7 @@ int total_workers = size-2;
           update_worker_status(b,workers,total_workers);
           update_recvd_works(received_work_ids,totalWorks,workers,total_workers);
           //temp_count +=1;
-          printf("receiving works fine\n");
+          printf("proxy receives work.\n");
           break;
         }
 
@@ -378,16 +369,19 @@ int total_workers = size-2;
     if(!received){
         is_alive = 0;
         MPI_Cancel(&request);
-        printf("killing master!!! hahaha!!!\n");
+        printf("Master timed out. Killing master!!! \n");
         terminate_process(global_comm,0);
         //kill_master(prime_comm);
     }
 
   }
 
+int work_recvd = 0;
 for(int i=0;i<totalWorks;i++){
-  if(received_work_ids[i] == 1)
+  if(received_work_ids[i] == 1){
+      work_recvd +=1;
       continue;
+      }
 
     char * b = serialize_works(1, works + i, f->work_sz);
     int work_id = i;//(int *)malloc(sizeof(int)*count);
@@ -405,8 +399,8 @@ for(int i=0;i<total_workers;i++){
     total_alive_workers +=1;
 }
 
-
-  get_work_done(rank,global_comm,q,workers, mw_results ,total_workers, total_alive_workers, total_alive_workers, f, totalWorks);
+  printf("proxy_master takes over\n");
+  get_work_done(rank,global_comm,q,workers, mw_results ,total_workers, total_alive_workers, total_alive_workers, f, totalWorks,work_recvd);
   free(works);
   free(all_data_buff);
   free(mw_results);
@@ -481,7 +475,7 @@ int master(MPI_Comm global_comm, int argc, char** argv, struct mw_api_spec *f )
   MPI_Status status;
   int work_recvd = 0;
 
-  get_work_done(rank,global_comm,q,workers, mw_results ,total_workers, total_free_workers, total_alive_workers, f, totalWorks);
+  get_work_done(rank,global_comm,q,workers, mw_results ,total_workers, total_free_workers, total_alive_workers, f, totalWorks,work_recvd);
   
   free(mw_results);
   free(works);
