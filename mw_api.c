@@ -100,7 +100,7 @@ void update_recvd_works(int *received_work_ids,int totalWorks,worker_t * workers
   for(int i=0;i<total_workers;i++){
     if(workers[i]->alive==1 && workers[i]->current_work_allocation != NULL){
       int id = workers[i]->current_work_allocation->work_id;
-      if( id>0 && id<totalWorks)
+      if( id>=0 && id<totalWorks)
         *(received_work_ids+id) = 1;
     }
   }
